@@ -5,9 +5,16 @@ authors = ["Laurence Tratt <laurie@tratt.net>"]
 license = "Apache-2.0/MIT"
 edition = "2018"
 
+[[test]]
+name = "lang_tests"
+path = "lang_tests/run.rs"
+harness = false
+
 [dependencies]
 getopts = "0.2"
 libc = "0.2"
 
 [dev-dependencies]
-tempfile = "3.0"
+lazy_static = "1.4"
+lang_tester = "0.3"
+regex = "1.3"
