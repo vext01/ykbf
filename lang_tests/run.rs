@@ -15,9 +15,7 @@ lazy_static! {
 fn main() {
     LangTester::new()
         .test_dir("lang_tests")
-        .test_file_filter(|p| {
-            p.extension().unwrap().to_str().unwrap() == "bf"
-        })
+        .test_file_filter(|p| p.extension().unwrap().to_str().unwrap() == "bf")
         .test_extract(|s| {
             EXPECTED
                 .captures(s)
