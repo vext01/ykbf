@@ -11,7 +11,7 @@ sh rustup.sh --default-host x86_64-unknown-linux-gnu --default-toolchain nightly
 export PATH=`pwd`/.cargo/bin/:$PATH
 
 # Sometimes rustfmt is so broken that there is no way to install it at all.
-# Rather than refusing to merge, we just can't rust rustfmt at such a point.
+# Rather than refusing to merge, we just don't run rustfmt at such a point.
 rustup component add --toolchain nightly rustfmt-preview \
     || cargo +nightly install --force rustfmt-nightly \
     || true
