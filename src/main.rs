@@ -1,4 +1,4 @@
-#![feature(yk)]
+//#![feature(yk)]
 
 use std::{
     env,
@@ -7,9 +7,10 @@ use std::{
     io::{stderr, Write},
     path::Path,
     process,
+    collections::HashMap
 };
 
-use ykcompile::TraceCompiler;
+use ykcompile::{TraceCompiler, CompiledTrace};
 use yktrace::{start_tracing, tir::TirTrace, TracingKind};
 
 use getopts::Options;
@@ -55,82 +56,119 @@ fn compile(txt: &str) -> (String, Vec<usize>) {
     (out, map)
 }
 
+struct IO {
+    prg: Vec<u8>,
+    map: Vec<usize>,
+    pc: usize,
+    ptr: usize,
+    cells: Vec<u8>
+}
+
+impl IO {
+    fn clone(&self) -> IO {
+        IO {
+            prg: self.prg.clone(),
+            map: self.map.clone(),
+            pc: self.pc.clone(),
+            ptr: self.ptr.clone(),
+            cells: self.cells.clone()
+        }
+    }
+}
+
 fn interp(prg: &[u8], map: Vec<usize>) {
-    let stdin = {
-        let mode = CString::new("r").unwrap();
-        unsafe { fdopen(libc::STDIN_FILENO, mode.as_ptr()) }
-    };
+    //let stdin = {
+    //    let mode = CString::new("r").unwrap();
+    //    unsafe { fdopen(libc::STDIN_FILENO, mode.as_ptr()) }
+    //};
 
     let pc = 0;
     let ptr = 0;
     let mut cells = Vec::with_capacity(30000);
     cells.resize(30000, 0u8);
-    let mut tio = core::yk::trace_inputs((pc, ptr, cells));
 
-    while tio.0 < prg.len() {
-        let tr = start_tracing(Some(TracingKind::HardwareTracing));
-        interp_inner(prg, map, stdin, &mut tio);
+    let mut tio = IO { prg: prg.to_vec(), map: map, pc, ptr, cells: cells };
+
+    //let mut lastop = None;
+    let mut lasttraces: HashMap<u8, CompiledTrace<IO>> = HashMap::new();
+    while tio.pc < prg.len() {
+        // If there's a compiled trace, run it.
+        let op = tio.prg[tio.pc];
+        if let Some(ct) = lasttraces.get(&op) {
+            // We got a trace. Now run it.
+            let tmp_io = tio.clone();
+            let success = ct.execute(&mut tio);
+            if !success {
+                // A guard failed. Reset IO state and return to interpreter mode.
+                tio = tmp_io;
+                lasttraces.remove(&op);
+            } else {
+                println!("{} {} {} {} (trace)", tio.prg[tio.pc] as char, tio.pc, tio.ptr, tio.cells[tio.ptr]);
+            }
+            continue;
+        }
+        let tr = start_tracing(TracingKind::HardwareTracing);
+        interp_inner(&mut tio);
+
         let sir_trace = tr.stop_tracing().unwrap();
-
-        let tir_trace = TirTrace::new(&*sir_trace).unwrap();
-        let _comp_trace = TraceCompiler::<&(usize, usize, Vec<u8>)>::compile(tir_trace);
-        todo!("execute the trace");
+        let tir_trace = TirTrace::new(&*yktrace::sir::SIR, &*sir_trace).unwrap();
+        let _comp_trace = TraceCompiler::<IO>::compile(tir_trace);
+        lasttraces.insert(op, _comp_trace);
     }
 }
 
+#[interp_step]
 fn interp_inner(
-    prg: &[u8],
-    map: Vec<usize>,
-    stdin: *mut libc::FILE,
-    tio: &mut (usize, usize, Vec<u8>),
-) {
-    match prg[tio.0] as char {
+    //stdin: *mut libc::FILE, // FIXME needs to go into trace_inputs
+    tio: &mut IO,
+){
+    match tio.prg[tio.pc] as char {
         '>' => {
-            if tio.1 == tio.2.len() {
-                tio.2.push(0);
+            if tio.ptr == tio.cells.len() {
+                tio.cells.push(0);
             }
-            tio.1 += 1;
+            tio.ptr += 1;
         }
         '<' => {
-            if tio.1 > 0 {
-                tio.1 -= 1;
+            if tio.ptr > 0 {
+                tio.ptr -= 1;
             }
         }
         '+' => {
-            tio.2[tio.1] = tio.2[tio.1].wrapping_add(1);
+            tio.cells[tio.ptr] = tio.cells[tio.ptr].wrapping_add(1);
         }
         '-' => {
-            tio.2[tio.1] = tio.2[tio.1].wrapping_sub(1);
+            tio.cells[tio.ptr] = tio.cells[tio.ptr].wrapping_sub(1);
         }
         '.' => {
-            let b = tio.2[tio.1];
+            let b = tio.cells[tio.ptr];
             unsafe {
                 putchar(b as c_int);
             }
         }
         ',' => {
-            let v = unsafe { getchar() };
-            if v == libc::EOF {
-                if unsafe { ferror(stdin) } != 0 {
-                    panic!("Error when reading from stdin.");
-                }
-            } else {
-                tio.2[tio.1] = v as u8;
-            }
+            //let v = unsafe { getchar() };
+            //if v == libc::EOF {
+            //    //if unsafe { ferror(stdin) } != 0 {
+            //    //    panic!("Error when reading from stdin.");
+            //    //}
+            //} else {
+            //    tio.cells[tio.ptr] = v as u8;
+            //}
         }
         '[' => {
-            if tio.2[tio.1] == 0 {
-                tio.0 = map[tio.0];
+            if tio.cells[tio.ptr] == 0 {
+                tio.pc = tio.map[tio.pc];
             }
         }
         ']' => {
-            if tio.2[tio.1] != 0 {
-                tio.0 = map[tio.0];
+            if tio.cells[tio.ptr] != 0 {
+                tio.pc = tio.map[tio.pc];
             }
         }
         _ => unreachable!(),
     }
-    tio.0 += 1;
+    tio.pc += 1;
 }
 
 fn main() {
