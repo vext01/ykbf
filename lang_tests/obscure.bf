@@ -1,4 +1,5 @@
 [
+  ignore: stop-gap interpreter is missing required functionality.
   VM:
     stdout: H
 ]
