@@ -1,0 +1,78 @@
+#!/bin/sh
+#
+# Builds ykbf against the Yorick hardware tracing JIT.
+#
+# Ideally this wrapper script wouldn't be necessary and we'd just have the user
+# pass `--features hw-tracer` to regular Cargo and we'd set flags in a
+# `build.rs` depending upon the `YK_DIR` and `CARGO_FEATURE_hw-tracer`
+# environments.
+#
+# The problem is that (at the time of writing) `build.rs` doesn't let us pass
+# arbitrary `RUSTFLAGS` to rustc. If we pass `-Z extra-link-arg` to Cargo, we
+# can pass *linker* flags, but we still have no way to tack on `-C tracer=hw`.
+# So without this wrapper, we'd be asking the user to write commands like:
+#
+# RUSTFLAGS="-C tracer=hw" cargo -Z extra-link-arg build
+#
+# or
+#
+# RUSTFLAGS="-C tracer=hw -C link-arg '-L/some/path -Wl,-rpath=/some/path" cargo build
+#
+# With this wrapper, they just write:
+#
+# ./cargo-hwtracer build
+#
+# And then there's the issue of finding `ykrt`, which will live at a different
+# path on a per-user-setup basis. This script makes a symlink so that we don't
+# have to manually edit (and potentially accidentally commit local changes to)
+# `Cargo.toml`.
+#
+# We also considered a solution where a `configure` script generates a
+# `.cargo/config` and a `build.rs`, but this was much more complicated than
+# this wrapper.
+#
+# Citations / further reading:
+#   https://github.com/rust-lang/cargo/issues/5077
+#   https://github.com/rust-lang/rfcs/issues/1766
+#   https://github.com/rust-lang/cargo/issues/9016
+#   https://github.com/rust-lang/rfcs/issues/1766
+
+set -e
+
+if [ "x${YK_DIR}" = "x" ]; then
+    echo "Please set the YK_DIR environment"
+    exit 1
+fi
+
+TARGET=$1
+if [ "x$1" = "x" ]; then
+    TARGET="build"
+else
+    TARGET=$1
+    shift
+fi
+
+# Where libkyshim.so lives.
+SHIM_DIR=${YK_DIR}/internal_ws/target/release
+
+# Emit SIR and set `#[cfg(tracermode = "hw")]`.
+OURFLAGS="-C tracer=hw"
+
+# Link libykshim.so.
+OURFLAGS="${OURFLAGS} -C link-args=-L${SHIM_DIR}"
+OURFLAGS="${OURFLAGS} -C link-args=-lykshim"
+
+# Add an rpath, so that the user doesn't have to set LD_LIBRARY_PATH.
+OURFLAGS="${OURFLAGS} -C link-args=-Wl,-rpath=${SHIM_DIR}"
+
+# Only some targets will accept `--features`.
+case ${TARGET} in
+    bench|build|check|test) FEATURES="--features hw-tracer";;
+    *) FEATURES=""
+esac
+
+# We can't dynamically point cargo to ${YK_DIR} in our dependencies, so we use
+# a symlink. Then from cargo's POV, yk lives at ./yk
+ln -sf ${YK_DIR} ./yk
+
+RUSTFLAGS="${RUSTFLAGS} ${OURFLAGS}" cargo ${TARGET} ${FEATURES} $*
