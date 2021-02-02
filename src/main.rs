@@ -1,14 +1,11 @@
 use std::{
-    env,
-    ffi::CString,
-    fs,
-    io::{stderr, Write},
+    env, fs,
+    io::{stderr, Read, Write},
     path::Path,
     process,
 };
 
 use getopts::Options;
-use libc::{self, c_int, fdopen, ferror, getchar, putchar};
 
 fn usage(prog: &str) -> ! {
     let path = Path::new(prog);
@@ -55,10 +52,8 @@ fn interp(prg: &[u8], map: Vec<usize>) {
     let mut ptr = 0;
     let mut cells = Vec::with_capacity(30000);
     cells.resize(30000, 0u8);
-    let stdin = {
-        let mode = CString::new("r").unwrap();
-        unsafe { fdopen(libc::STDIN_FILENO, mode.as_ptr()) }
-    };
+    let mut stdin = std::io::stdin().bytes();
+    let mut stdout = std::io::stdout();
     while pc < prg.len() {
         match prg[pc] as char {
             '>' => {
@@ -79,19 +74,12 @@ fn interp(prg: &[u8], map: Vec<usize>) {
                 cells[ptr] = cells[ptr].wrapping_sub(1);
             }
             '.' => {
-                let b = cells[ptr];
-                unsafe {
-                    putchar(b as c_int);
-                }
+                stdout.write_all(&[cells[ptr]]).unwrap();
             }
             ',' => {
-                let v = unsafe { getchar() };
-                if v == libc::EOF {
-                    if unsafe { ferror(stdin) } != 0 {
-                        panic!("Error when reading from stdin.");
-                    }
-                } else {
-                    cells[ptr] = v as u8;
+                let v = stdin.next();
+                if let Some(b) = v {
+                    cells[ptr] = b.unwrap();
                 }
             }
             '[' => {
