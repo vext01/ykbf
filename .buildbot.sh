@@ -5,6 +5,19 @@ set -e
 export CARGO_HOME="`pwd`/.cargo"
 export RUSTUP_HOME="`pwd`/.rustup"
 
+case ${STD_TRACER_MODE} in
+    "sw" | "hw" ) true;;
+    *) echo "STD_TRACER_MODE must be set to either 'hw' or 'sw'"
+       exit 1;;
+esac
+
+
+# Use the most recent successful ykrustc build.
+tar jxf /opt/ykrustc-bin-snapshots/ykrustc-${STD_TRACER_MODE}-stage2-latest.tar.bz2
+export PATH=`pwd`/ykrustc-stage2-latest/bin:${PATH}
+
+RUSTFLAGS="${RUSTFLAGS} -D warnings -C tracer=${STD_TRACER_MODE}" cargo test
+
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup.sh
 sh rustup.sh --default-host x86_64-unknown-linux-gnu --default-toolchain nightly -y --no-modify-path
 
@@ -16,9 +29,6 @@ sh rustup.sh --default-host x86_64-unknown-linux-gnu \
     --no-modify-path \
     --profile minimal \
     -y
-
-cargo test
-cargo test --release
 
 rustup toolchain install nightly --allow-downgrade --component rustfmt
 cargo +nightly fmt --all -- --check

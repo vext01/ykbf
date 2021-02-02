@@ -1,11 +1,15 @@
+//#[cfg(not(tracermode = "hw"))]
+//compile_error!("ykbf must be built with ykrustc");
+
 use std::{
     env, fs,
-    io::{stderr, Read, Write},
+    io::{stderr, Bytes, Read, Stdin, Stdout, Write},
     path::Path,
     process,
 };
 
 use getopts::Options;
+use ykrt::{Location, MTBuilder};
 
 fn usage(prog: &str) -> ! {
     let path = Path::new(prog);
@@ -47,55 +51,93 @@ fn compile(txt: &str) -> (String, Vec<usize>) {
     (out, map)
 }
 
-fn interp(prg: &[u8], map: Vec<usize>) {
-    let mut pc = 0;
-    let mut ptr = 0;
-    let mut cells = Vec::with_capacity(30000);
-    cells.resize(30000, 0u8);
-    let mut stdin = std::io::stdin().bytes();
-    let mut stdout = std::io::stdout();
-    while pc < prg.len() {
-        match prg[pc] as char {
-            '>' => {
-                if ptr == cells.len() {
-                    cells.push(0);
-                }
-                ptr += 1;
-            }
-            '<' => {
-                if ptr > 0 {
-                    ptr -= 1;
-                }
-            }
-            '+' => {
-                cells[ptr] = cells[ptr].wrapping_add(1);
-            }
-            '-' => {
-                cells[ptr] = cells[ptr].wrapping_sub(1);
-            }
-            '.' => {
-                stdout.write_all(&[cells[ptr]]).unwrap();
-            }
-            ',' => {
-                let v = stdin.next();
-                if let Some(b) = v {
-                    cells[ptr] = b.unwrap();
-                }
-            }
-            '[' => {
-                if cells[ptr] == 0 {
-                    pc = map[pc];
-                }
-            }
-            ']' => {
-                if cells[ptr] != 0 {
-                    pc = map[pc];
-                }
-            }
-            _ => unreachable!(),
+#[derive(Debug)]
+struct InterpCtx {
+    pc: usize,
+    ptr: usize,
+    cells: Vec<u8>,
+    prog: Vec<u8>,
+    map: Vec<usize>,
+    stdin: Bytes<Stdin>,
+    stdout: Stdout,
+}
+
+fn interp(prog: &[u8], map: Vec<usize>) {
+    let mut icx = InterpCtx {
+        pc: 0,
+        ptr: 0,
+        cells: Vec::from([0; 30000]),
+        map,
+        prog: prog.to_vec(),
+        stdin: std::io::stdin().bytes(),
+        stdout: std::io::stdout(),
+    };
+
+    // Locations are created for every program point, even if a loop cannot start there. We do this
+    // because it's more efficient to store an unused `Location` than it is for elements to be of
+    // type `Option<Location>`.
+    let mut locs = Vec::with_capacity(icx.prog.len());
+    locs.resize_with(prog.len(), Location::new);
+
+    let mut mtt = MTBuilder::new().hot_threshold(2).init();
+    loop {
+        // We could pass a `Location` in for every program point, but that would cause traces to be
+        // compiled that don't start at the beginning of a loop. Thus we only pass a `Location` for
+        // instructions that are the first in a loop, passing in `None` otherwise.
+        let loc = if icx.pc > 1 && (icx.prog[icx.pc - 1] as char) == '[' {
+            Some(&locs[icx.pc])
+        } else {
+            None
+        };
+        mtt.control_point(loc, interp_step, &mut icx);
+        if icx.pc >= icx.prog.len() {
+            break;
         }
-        pc += 1;
     }
+}
+
+#[interp_step]
+fn interp_step(icx: &mut InterpCtx) {
+    match icx.prog[icx.pc] as char {
+        '>' => {
+            if icx.ptr == icx.cells.len() {
+                icx.cells.push(0);
+            }
+            icx.ptr += 1;
+        }
+        '<' => {
+            if icx.ptr > 0 {
+                icx.ptr -= 1;
+            }
+        }
+        '+' => {
+            icx.cells[icx.ptr] = icx.cells[icx.ptr].wrapping_add(1);
+        }
+        '-' => {
+            icx.cells[icx.ptr] = icx.cells[icx.ptr].wrapping_sub(1);
+        }
+        '.' => {
+            icx.stdout.write_all(&[icx.cells[icx.ptr]]).unwrap();
+        }
+        ',' => {
+            let v = icx.stdin.next();
+            if let Some(b) = v {
+                icx.cells[icx.ptr] = b.unwrap();
+            }
+        }
+        '[' => {
+            if icx.cells[icx.ptr] == 0 {
+                icx.pc = icx.map[icx.pc];
+            }
+        }
+        ']' => {
+            if icx.cells[icx.ptr] != 0 {
+                icx.pc = icx.map[icx.pc];
+            }
+        }
+        _ => unreachable!(),
+    }
+    icx.pc += 1;
 }
 
 fn main() {
