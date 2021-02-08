@@ -10,13 +10,10 @@ name = "lang_tests"
 path = "lang_tests/run.rs"
 harness = false
 
-[features]
-hw-tracer = ["ykrt"]
-
 [dependencies]
 getopts = "0.2.21"
 libc = "0.2.84"
-ykrt = { path = "./yk/ykrt", optional=true } # This is a symlink created by our cargo wrapper.
+ykrt = { git = "https://github.com/softdevteam/yk" }
 
 [dev-dependencies]
 lazy_static = "1.4.0"
