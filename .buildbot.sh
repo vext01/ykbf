@@ -11,7 +11,7 @@ case ${STD_TRACER_MODE} in
        exit 1;;
 esac
 
-RUSTFLAGS="${RUSTFLAGS} -D warnings -C tracer=${STD_TRACER_MODE}"
+export RUSTFLAGS="${RUSTFLAGS} -D warnings -C tracer=${STD_TRACER_MODE}"
 
 # Use the most recent successful ykrustc build.
 tar jxf /opt/ykrustc-bin-snapshots/ykrustc-${STD_TRACER_MODE}-stage2-latest.tar.bz2
