@@ -1,4 +1,5 @@
 [
+  ignore: JIT can't trace this yet
   VM:
     stdout: H
 ]
