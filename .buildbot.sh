@@ -17,7 +17,9 @@ sh rustup.sh --default-host x86_64-unknown-linux-gnu \
     --profile minimal \
     -y
 
-# FIXME, the JIT cannot run the tests yet.
+# FIXME, the JIT cannot run the tests yet and we can't yet ignore individual
+# tests:
+# https://github.com/softdevteam/ykbf/issues/10
 #cargo test
 #cargo test --release
 
