@@ -11,13 +11,12 @@ case ${STD_TRACER_MODE} in
        exit 1;;
 esac
 
-export RUSTFLAGS="${RUSTFLAGS} -D warnings -C tracer=${STD_TRACER_MODE}"
 
 # Use the most recent successful ykrustc build.
 tar jxf /opt/ykrustc-bin-snapshots/ykrustc-${STD_TRACER_MODE}-stage2-latest.tar.bz2
 export PATH=`pwd`/ykrustc-stage2-latest/bin:${PATH}
 
-cargo test
+RUSTFLAGS="${RUSTFLAGS} -D warnings -C tracer=${STD_TRACER_MODE}" cargo test
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup.sh
 sh rustup.sh --default-host x86_64-unknown-linux-gnu --default-toolchain nightly -y --no-modify-path
