@@ -89,15 +89,14 @@ fn interp(prog: &[u8], map: Vec<usize>) {
         } else {
             None
         };
-        mtt.control_point(loc, interp_step, &mut icx);
-        if icx.pc >= icx.prog.len() {
+        if mtt.control_point(loc, interp_step, &mut icx) {
             break;
         }
     }
 }
 
 #[interp_step]
-fn interp_step(icx: &mut InterpCtx) {
+fn interp_step(icx: &mut InterpCtx) -> bool {
     match icx.prog[icx.pc] as char {
         '>' => {
             if icx.ptr == icx.cells.len() {
@@ -138,6 +137,10 @@ fn interp_step(icx: &mut InterpCtx) {
         _ => unreachable!(),
     }
     icx.pc += 1;
+    if icx.pc >= icx.prog.len() {
+        return true;
+    }
+    false
 }
 
 fn main() {
