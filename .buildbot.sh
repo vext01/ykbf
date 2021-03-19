@@ -18,6 +18,8 @@ export PATH=`pwd`/ykrustc-stage2-latest/bin:${PATH}
 
 export RUSTFLAGS="${RUSTFLAGS} -D warnings -C tracer=${CI_TRACER_KIND}"
 
+which cargo
+echo "[${RUSTFLAGS}]"
 cargo test
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup.sh
