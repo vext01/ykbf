@@ -16,7 +16,7 @@ esac
 tar jxf /opt/ykrustc-bin-snapshots/ykrustc-${CI_TRACER_KIND}-stage2-latest.tar.bz2
 export PATH=`pwd`/ykrustc-stage2-latest/bin:${PATH}
 
-RUSTFLAGS="${RUSTFLAGS} -D warnings -C tracer=${CI_TRACER_KIND}" cargo test
+RUSTFLAGS="-D warnings -C tracer=${CI_TRACER_KIND}" cargo test
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > rustup.sh
 sh rustup.sh --default-host x86_64-unknown-linux-gnu --default-toolchain nightly -y --no-modify-path
