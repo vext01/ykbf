@@ -1,6 +1,3 @@
-//#[cfg(not(tracermode = "hw"))]
-//compile_error!("ykbf must be built with ykrustc");
-
 use std::{
     env, fs,
     io::{stderr, Bytes, Read, Stdin, Stdout, Write},
