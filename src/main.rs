@@ -76,7 +76,7 @@ fn interp(prog: &[u8], map: Vec<usize>) {
     let mut locs = Vec::with_capacity(icx.prog.len());
     locs.resize_with(prog.len(), Location::new);
 
-    let mut mtt = MTBuilder::new().hot_threshold(2).init();
+    let mut mtt = MTBuilder::new().unwrap().build();
     loop {
         // We could pass a `Location` in for every program point, but that would cause traces to be
         // compiled that don't start at the beginning of a loop. Thus we only pass a `Location` for
